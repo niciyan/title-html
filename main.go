@@ -9,43 +9,45 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 {
+	if len(os.Args) < 2 {
 		fmt.Println("Usage: title-html <URL>")
 		return
 	}
 
-	url := os.Args[1]
+	for i, url := range os.Args[1:] {
+		if i >= 1 {
+			fmt.Println("")
+		}
+		err := fetchTitle(url)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+}
+
+func fetchTitle(url string) error {
 
 	res, err := http.Get(url)
 	if err != nil {
-		fmt.Errorf("error while fetching %v. %v\n", url, err)
-		return
+		return fmt.Errorf("error while fetching %v. %v\n", url, err)
 	}
 	defer res.Body.Close()
 
-	err = handleStatus(res)
-	if err != nil {
-		fmt.Println(err)
-		return
+	if res.StatusCode < 200 || res.StatusCode > 400 {
+		return errors.New(fmt.Sprintf("Request failed. Response Status Code: %v", res.StatusCode))
 	}
 
 	node, err := html.Parse(res.Body)
 	if err != nil {
-		fmt.Errorf("error while body. %v", err)
-		return
+		return fmt.Errorf("error while body. %v", err)
 	}
 	res.Body.Close()
 
 	n, err := getTitleNode(node)
-	fmt.Printf("[%v](%v)\n", n.FirstChild.Data, url)
-	// title, _ := traverse(node)
-	// fmt.Printf("[%v](%v)\n", title, url)
-}
-
-func handleStatus(resp *http.Response) error {
-	if resp.StatusCode < 200 || resp.StatusCode > 400 {
-		return errors.New(fmt.Sprintf("Request seems to fail. Response Status Code: %v", resp.StatusCode))
+	if err != nil {
+		return err
 	}
+	fmt.Printf("[%v](%v)\n", n.FirstChild.Data, url)
 	return nil
 }
 
