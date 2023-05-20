@@ -2,52 +2,58 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
-	"golang.org/x/net/html"
 	"net/http"
-	"os"
+
+	"golang.org/x/net/html"
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: title-html <URL>")
+	var simple = flag.Bool("s", false, "simple mode")
+	flag.Parse()
+	if flag.NArg() < 1 {
+		fmt.Println("Usage: title-html <URL> <URL> ...")
 		return
 	}
 
-	for i, url := range os.Args[1:] {
-		if i >= 1 {
-			fmt.Println("")
+	for _, url := range flag.Args() {
+		res, err := http.Get(url)
+		if err != nil {
+			fmt.Printf("error while fetching %v. %v\n", url, err)
+			return
 		}
-		err := fetchTitle(url)
+		defer res.Body.Close()
+
+		err = handleStatus(res)
 		if err != nil {
 			fmt.Println(err)
+			return
 		}
+
+		node, err := html.Parse(res.Body)
+		if err != nil {
+			fmt.Printf("error while body. %v", err)
+			return
+		}
+		res.Body.Close()
+
+		n, err := getTitleNode(node)
+		if *simple {
+			fmt.Printf("%v\n%v\n", n.FirstChild.Data, url)
+		} else {
+			fmt.Printf("[%v](%v)\n", n.FirstChild.Data, url)
+		}
+
 	}
+	// title, _ := traverse(node)
+	// fmt.Printf("[%v](%v)\n", title, url)
 }
 
-func fetchTitle(url string) error {
-
-	res, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("error while fetching %v. %v\n", url, err)
+func handleStatus(resp *http.Response) error {
+	if resp.StatusCode < 200 || resp.StatusCode > 400 {
+		return errors.New(fmt.Sprintf("Request seems to fail. Response Status Code: %v", resp.StatusCode))
 	}
-	defer res.Body.Close()
-
-	if res.StatusCode < 200 || res.StatusCode > 400 {
-		return errors.New(fmt.Sprintf("Request failed. Response Status Code: %v", res.StatusCode))
-	}
-
-	node, err := html.Parse(res.Body)
-	if err != nil {
-		return fmt.Errorf("error while body. %v", err)
-	}
-	res.Body.Close()
-
-	n, err := getTitleNode(node)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("[%v](%v)\n", n.FirstChild.Data, url)
 	return nil
 }
 
